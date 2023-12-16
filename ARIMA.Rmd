@@ -1,0 +1,66 @@
+---
+title: "Multi"
+author: "Nisyhaal"
+date: "2023-12-16"
+output: html_document
+---
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(tidyr)
+library(caret)
+
+# Import the CSV dataset
+data <- read.csv("df_cleaned.csv")
+
+# Drop the 'date' column
+data <- data %>%
+  select(-date)
+
+# Convert preciptype, holiday, and covid to factors
+data$preciptype <- as.factor(data$preciptype)
+data$holiday <- as.factor(data$holiday)
+data$covid <- as.factor(data$covid)
+
+# Handle missing values if any
+data <- na.omit(data)
+
+# Split the dataset into training and testing sets based on date (80% train, 20% test)
+set.seed(123)  # Set seed for reproducibility
+index <- createDataPartition(data$bus_rkl, p = 0.8, list = FALSE, times = 1)
+train_data <- data[index, ]
+test_data <- data[-index, ]
+
+# Train Multiple Linear Regression model on the training set
+model <- lm(cbind(bus_rkl, rail_lrt_ampang, rail_mrt_kajang, rail_lrt_kj, rail_monorail, rail_mrt_pjy) ~ ., data = train_data)
+
+# Make predictions on the test set
+predictions <- as.data.frame(predict(model, newdata = test_data))
+
+
+
+# Evaluate the model for all target variables
+performance_metrics <- lapply(1:6, function(i) {
+  obs <- as.factor(test_data[, i])
+  pred <- as.factor(predictions[, i])
+  
+  if (length(unique(obs)) > 1 & length(unique(pred)) > 1) {
+    confusion_matrix <- confusionMatrix(pred, obs)
+    accuracy <- confusion_matrix$overall["Accuracy"]
+    kappa <- confusion_matrix$overall["Kappa"]
+  } else {
+    accuracy <- NA
+    kappa <- NA
+  }
+
+  return(c(Accuracy = accuracy, Kappa = kappa))
+})
+
+# Print evaluation metrics for each target variable
+for (i in 1:6) {
+  cat("\nEvaluation metrics for target variable", colnames(test_data)[i], ":\n")
+  print(performance_metrics[[i]])
+}
+```
+
