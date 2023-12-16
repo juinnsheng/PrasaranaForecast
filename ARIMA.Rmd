@@ -1,66 +1,82 @@
 ---
-title: "Multi"
+title: "ARIMA"
 author: "Nisyhaal"
 date: "2023-12-16"
 output: html_document
 ---
 
+# Load libraries
 ```{r}
-# Load necessary libraries
-library(dplyr)
-library(tidyr)
-library(caret)
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(forecast)
+```
 
-# Import the CSV dataset
+# Load & Explore Data
+```{r}
+# Load the dataset
 data <- read.csv("df_cleaned.csv")
 
-# Drop the 'date' column
-data <- data %>%
-  select(-date)
+# Explore the structure of the dataset
+str(data)
+```
 
-# Convert preciptype, holiday, and covid to factors
+# Data preprocessing
+```{r}
+# Convert 'date' column to a Date object
+data$date <- as.Date(data$date)
+
+# Convert 'preciptype', 'holiday', and 'covid' to factors
 data$preciptype <- as.factor(data$preciptype)
 data$holiday <- as.factor(data$holiday)
 data$covid <- as.factor(data$covid)
+```
 
-# Handle missing values if any
-data <- na.omit(data)
+# Data Splitting
+```{r}
+# Split the data into training and testing sets
+train_ratio <- 0.8  # 80% for training, 20% for testing
 
-# Split the dataset into training and testing sets based on date (80% train, 20% test)
-set.seed(123)  # Set seed for reproducibility
-index <- createDataPartition(data$bus_rkl, p = 0.8, list = FALSE, times = 1)
-train_data <- data[index, ]
-test_data <- data[-index, ]
+train_size <- floor(train_ratio * nrow(data))
+train_data <- data[1:train_size, ]
+test_data <- data[(train_size + 1):nrow(data), ]
+```
 
-# Train Multiple Linear Regression model on the training set
-model <- lm(cbind(bus_rkl, rail_lrt_ampang, rail_mrt_kajang, rail_lrt_kj, rail_monorail, rail_mrt_pjy) ~ ., data = train_data)
-
-# Make predictions on the test set
-predictions <- as.data.frame(predict(model, newdata = test_data))
-
-
-
-# Evaluate the model for all target variables
-performance_metrics <- lapply(1:6, function(i) {
-  obs <- as.factor(test_data[, i])
-  pred <- as.factor(predictions[, i])
+# ARIMA Model Training and Evaluation
+```{r}
+# Define a function for ARIMA modeling and evaluation
+arima_model <- function(train, test, target_variable) {
+  cat("Training ARIMA model for", target_variable, "\n")
   
-  if (length(unique(obs)) > 1 & length(unique(pred)) > 1) {
-    confusion_matrix <- confusionMatrix(pred, obs)
-    accuracy <- confusion_matrix$overall["Accuracy"]
-    kappa <- confusion_matrix$overall["Kappa"]
-  } else {
-    accuracy <- NA
-    kappa <- NA
-  }
+  # Extract the target variable
+  y_train <- train[[target_variable]]
+  y_test <- test[[target_variable]]
+  
+  # Fit ARIMA model
+  arima_fit <- auto.arima(y_train)
+  
+  # Forecast
+  forecast_values <- forecast(arima_fit, h = length(y_test))
+  
+  # Model Evaluation
+  accuracy_metrics <- accuracy(forecast_values, y_test)
+  
+  # Print evaluation metrics
+  print(accuracy_metrics)
+  
+  # Plot actual vs. predicted
+  plot(forecast_values, main = paste("ARIMA Forecast for", target_variable))
+  lines(y_test, col = "red")
+  
+  # Save the model
+  save(arima_fit, file = paste("arima_model_", target_variable, ".RData", sep = ""))
+}
 
-  return(c(Accuracy = accuracy, Kappa = kappa))
-})
+# Apply the function for each target variable
+target_variables <- c("bus_rkl", "rail_lrt_ampang", "rail_mrt_kajang", "rail_lrt_kj", "rail_monorail", "rail_mrt_pjy")
 
-# Print evaluation metrics for each target variable
-for (i in 1:6) {
-  cat("\nEvaluation metrics for target variable", colnames(test_data)[i], ":\n")
-  print(performance_metrics[[i]])
+for (target_var in target_variables) {
+  arima_model(train_data, test_data, target_var)
 }
 ```
 
