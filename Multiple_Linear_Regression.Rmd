@@ -24,87 +24,100 @@ data$preciptype <- as.factor(data$preciptype)
 data$holiday <- as.factor(data$holiday)
 data$covid <- as.factor(data$covid)
 
+# Normalize the predictors
+data_normalized <- data
+
+# Exclude non-numeric columns from normalization
+numeric_cols <- sapply(data_normalized, is.numeric)
+data_normalized[, numeric_cols] <- scale(data_normalized[, numeric_cols])
+
 set.seed(123)  # For reproducibility
-train_index <- createDataPartition(data$bus_rkl, p = 0.9, list = FALSE)
-train_data <- data[train_index, ]
-test_data <- data[-train_index, ]
+train_index <- createDataPartition(data_normalized$bus_rkl, p = 0.9, list = FALSE)
+train_data <- data_normalized[train_index, ]
+test_data <- data_normalized[-train_index, ]
 ```
 
 # Bus RKL
 ```{r}
-# Train the linear regression model
+# Linear regression model training
 model_bus_rkl <- lm(bus_rkl ~ ., data = train_data)
 
-# Make predictions on the test set
+# Make predictions
 predictions_bus_rkl <- predict(model_bus_rkl, newdata = test_data)
 
 # Model evaluation
 bus_rkl_metrics <- caret::defaultSummary(data.frame(obs = test_data$bus_rkl, pred = predictions_bus_rkl))
+print("Normalized Data Metrics (Bus RKL):")
 print(bus_rkl_metrics)
 ```
 
 # LRT Ampang
 ```{r}
-# Train the linear regression model
+# Linear regression model training
 model_rail_lrt_ampang <- lm(rail_lrt_ampang ~ ., data = train_data)
 
-# Make predictions on the test set
+# Make predictions
 predictions_rail_lrt_ampang <- predict(model_rail_lrt_ampang, newdata = test_data)
 
 # Model evaluation
 rail_lrt_ampang_metrics <- caret::defaultSummary(data.frame(obs = test_data$rail_lrt_ampang, pred = predictions_rail_lrt_ampang))
+print("Normalized Data Metrics (LRT Ampang):")
 print(rail_lrt_ampang_metrics)
 ```
 
 # MRT Kajang
 ```{r}
-# Train the linear regression model
+# Linear regression model training
 model_rail_mrt_kajang <- lm(rail_mrt_kajang ~ ., data = train_data)
 
-# Make predictions on the test set
+# Make predictions
 predictions_rail_mrt_kajang <- predict(model_rail_mrt_kajang, newdata = test_data)
 
 # Model evaluation
 rail_mrt_kajang_metrics <- caret::defaultSummary(data.frame(obs = test_data$rail_mrt_kajang, pred = predictions_rail_mrt_kajang))
+print("Normalized Data Metrics (MRT Kajang):")
 print(rail_mrt_kajang_metrics)
 ```
 
 # LRT Kelana Jaya
 ```{r}
-# Train the linear regression model
+# Linear regression model training
 model_rail_lrt_kj <- lm(rail_lrt_kj ~ ., data = train_data)
 
-# Make predictions on the test set
+# Make predictions
 predictions_rail_lrt_kj <- predict(model_rail_lrt_kj, newdata = test_data)
 
 # Model evaluation
 rail_lrt_kj_metrics <- caret::defaultSummary(data.frame(obs = test_data$rail_lrt_kj, pred = predictions_rail_lrt_kj))
+print("Normalized Data Metrics (LRT Kelana Jaya):")
 print(rail_lrt_kj_metrics)
 ```
 
 # Monorail
 ```{r}
-# Train the linear regression model
+# Linear regression model training
 model_rail_monorail <- lm(rail_monorail ~ ., data = train_data)
 
-# Make predictions on the test set
+# Make predictions
 predictions_rail_monorail <- predict(model_rail_monorail, newdata = test_data)
 
 # Model evaluation
 rail_monorail_metrics <- caret::defaultSummary(data.frame(obs = test_data$rail_monorail, pred = predictions_rail_monorail))
+print("Normalized Data Metrics (Monorail):")
 print(rail_monorail_metrics)
 ```
 
 # MRT Putrajaya
 ```{r}
-# Train the linear regression model
+# Linear regression model training
 model_rail_mrt_pjy <- lm(rail_mrt_pjy ~ ., data = train_data)
 
-# Make predictions on the test set
+# Make predictions
 predictions_rail_mrt_pjy <- predict(model_rail_mrt_pjy, newdata = test_data)
 
 # Model evaluation
 rail_mrt_pjy_metrics <- caret::defaultSummary(data.frame(obs = test_data$rail_mrt_pjy, pred = predictions_rail_mrt_pjy))
+print("Normalized Data Metrics (MRT Putrajaya):")
 print(rail_mrt_pjy_metrics)
 ```
 

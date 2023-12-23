@@ -14,10 +14,7 @@ library(forecast)
 
 # Load & Explore Data
 ```{r}
-# Load the dataset
 data <- read.csv("df_cleaned.csv")
-
-# Explore the structure of the dataset
 str(data)
 ```
 
@@ -30,21 +27,28 @@ data$date <- as.Date(data$date)
 data$preciptype <- as.factor(data$preciptype)
 data$holiday <- as.factor(data$holiday)
 data$covid <- as.factor(data$covid)
+
+# Normalization function
+normalize_series <- function(series) {
+  scale(series)
+}
+
+# Normalize the entire dataset
+normalized_data <- data %>%
+  mutate(across(where(is.numeric), normalize_series))
 ```
 
 # Data Splitting
 ```{r}
 # Split the data into training and testing sets
 train_ratio <- 0.8  # 80% for training, 20% for testing
-
-train_size <- floor(train_ratio * nrow(data))
-train_data <- data[1:train_size, ]
-test_data <- data[(train_size + 1):nrow(data), ]
+train_size <- floor(train_ratio * nrow(normalized_data))
+train_data <- normalized_data[1:train_size, ]
+test_data <- normalized_data[(train_size + 1):nrow(normalized_data), ]
 ```
 
 # ARIMA Model Training and Evaluation
 ```{r}
-# Define a function for ARIMA modeling and evaluation
 arima_model <- function(train, test, target_variable) {
   cat("Training ARIMA model for", target_variable, "\n")
   
