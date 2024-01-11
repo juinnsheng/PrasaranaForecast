@@ -29,16 +29,6 @@ Our dataset is obtained from various sources, which include Wikipedia, data.gov.
 The ridership and fuel dataset obtained from data.gov.my has the most updated data as of the date we extracted the data from the website (2019 - November 2023), while the other datasets are obtained from 2019-2023.
 The purpose of the dataset is to investigate the various contributing factors that may contribute to a spike or decrease in Prasarana ridership. We will explore the data's dimensions, content, structure, and summary in the section below.
 
-Group Members:
-
-Name	
-
-Na Juinn Sheng @juinnsheng
-Tan Fong Yi @Triyin
-Nisyhaal Tamil A/L Tamilchelvam @nisyhaal
-Mark Nicholas Akyapogu @marknicholas15
-Zhang Yan Yu Bo 
-Xiao Rui Jie
 
 Link to RPubs:
 http://rpubs.com/jsheng/prasaranaforecast 
@@ -58,4 +48,14 @@ Solaymani, S. (2022).
 I would like to thank all of my group members for their contributions and support in this project. 
 
 
+
+
+## Authors
+
+- [@Nisyhaal](https://github.com/Nisyhaal)
+- [@juinnsheng] (https://github.com/juinnsheng)
+- [@marknicholas15] (https://github.com/marknicholas15)
+- Tan Fong Yi
+- Zhang Yan Yu Bo
+- Bruce Xiao Rui Jie 
 
