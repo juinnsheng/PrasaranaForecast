@@ -32,11 +32,12 @@ The purpose of the dataset is to investigate the various contributing factors th
 Group Members:
 
 Name	
-Na Juinn Sheng
-Tan Fong Yi
-Nisyhaal Tamil A/L Tamilchelvam
-Mark Nicholas Akyapogu
-Zhang Yan Yu Bo
+
+Na Juinn Sheng @juinnsheng
+Tan Fong Yi @Triyin
+Nisyhaal Tamil A/L Tamilchelvam @nisyhaal
+Mark Nicholas Akyapogu @marknicholas15
+Zhang Yan Yu Bo 
 Xiao Rui Jie
 
 Link to RPubs:
