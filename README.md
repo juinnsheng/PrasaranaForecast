@@ -55,7 +55,7 @@ I would like to thank all of my group members for their contributions and suppor
 - [@Nisyhaal](https://github.com/Nisyhaal)
 - [@juinnsheng](https://github.com/juinnsheng)
 - [@marknicholas15](https://github.com/marknicholas15)
-- Tan Fong Yi
+- [@Triyin](https://github.com/Triyin)
 - Zhang Yan Yu Bo
 - Bruce Xiao Rui Jie 
 
