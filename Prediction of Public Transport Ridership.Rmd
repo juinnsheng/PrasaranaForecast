@@ -1,0 +1,1256 @@
+---
+title: "WQD7004 Predicting public transport ridership in Kuala Lumpur based on various factors"
+author: Mark Nicholas Akyapogu, Na Juinn Sheng, Nisyhaal Tamil A/L TamilChelvam, Tan Fong Yi, Xiao Rui Jie, Zhang Yanyubo
+output: html_document
+occurence: 2
+Group: 
+date: "2023-12-26"
+---
+
+# **Title: Predicting public transport ridership in Kuala Lumpur based on various factors **
+
+## Introduction
+
+According to a recent article by NST, Malaysia Transport Minister Anthony Loke has informed that cars made up the highest number of registered vehicles, with 17,244,978 cars in 2023. The total number of registered vehicles in Malaysia has reached more than 36.3 million, exceeding the country's population. The large number of cars on the road can be concerning as many vehicles may lead to heavy traffic congestion in the Klang Valley area. Besides, there is also a large amount of CO2 emissions due to emissions from such vehicles. Transport is Malaysia's second largest carbon dioxide driver after electricity and 
+heat production (Solaymani, 2022). The lack of low-carbon technologies, the electrification of vehicles, the lack of EV charging ports widely implemented across Malaysia, and the lack of connectivity of rail networks and buses across the Klang Valley and other rural states are concerning. We aim to explore the main driving factors that could contribute to the fluctuating patterns of public transport ridership based on factors such as weather, Covid-19, fuel price, and public holidays and predict such ridership for each Prasarana rail and bus service. At the end of our project, we aim to contribute to infrastructure optimization - for instance, increasing intervals during the rainy season and using our data to support decision-making processes.
+
+## Business Objective
+1. To develop a time series forecasting model using Prasarana dataset obtained from data.gov.my 
+2. To employ regression modelling by considering various factors that may influence the ridership of Prasarana services with an accuracy of 70%.
+3. To explore and analyze the data using various EDA techniques to understand patterns and hidden insights in the dataset
+
+## Understanding about our dataset
+Our dataset is obtained from various sources, which include Wikipedia, data.gov.my, weather (visualcrossing.com), and publicholidays.com.my.
+The ridership and fuel dataset obtained from data.gov.my has the most updated data as of the date we extracted the data from the website (2019 - November 2023), while the other datasets are obtained from 2019-2023.
+The purpose of the dataset is to investigate the various contributing factors that may contribute to a spike or decrease in Prasarana ridership. We will explore the data's dimensions, content, structure and summary in the section below.
+
+
+## References
+https://www.nst.com.my/news/nation/2023/12/987062/363-million-vehicles-malaysia#
+Solaymani, S. (2022). CO2 emissions and the transport sector in Malaysia. Frontiers in Environmental Science, 9, 774164. https://doi.org/10.3389/fenvs.2021.774164
+
+## Team contribution
+1. Na Juinn Sheng (Leader) - Introduction, Business Objective, Web Scraping, Obtaining Data, Merging of Data, Data Pre-processing, EDA Q19 - Q24, 3 Machine Learning Models (SARIMA, XGBOOST using Caret and MLR, K-Means Clustering), Video Editing + Presentation
+2. Tan Fong Yi - Most of the EDA (EDA Q1 - Q18) + Presentation 
+3. Nisyhaal Tamil - Machine Learning Model for every Prasarana services (Multiple Linear Regression, ARIMA) + Presentation
+4. Zhang Yanyubo - EDA Q25 - Q29 + Presentation
+5. Mark Nicholas Akyapogu - Machine Learning Model (Random Forest using Caret) + Presentation
+6. Xiao Rui Jie - 1 box plot graph + Presentation on Introduction and Business Objective.
+
+## Web scraping
+```{r}
+
+library(rvest)
+library(tidyverse)
+library(dplyr)
+
+#This code section scrapes the Wikipedia table to obtain the MCO dates
+
+url <- "https://en.wikipedia.org/wiki/Malaysian_movement_control_order"
+html <- read_html(url)
+html %>%
+  html_elements(".wikitable") %>%
+  html_table() -> wikitables
+#This code select the relevant table
+df <- wikitables[[1]]
+df <- as.data.frame(wikitables[[1]])
+df$Date <- as.character(df$Date)
+
+#This code extracts the start date and end date
+df <- df %>%
+  mutate(Start_Date = str_extract(Date, "\\d{1,2} [a-zA-Z]+ \\d{4}"),
+         End_Date = str_extract(Date, "(?<=– )\\d{1,2} [a-zA-Z]+ \\d{4}"))
+
+df$Start_Date <- as.Date(df$Start_Date, format="%d %B %Y")
+df$End_Date <- as.Date(df$End_Date, format="%d %B %Y")
+
+df_Start_Date <- data.frame(Start_Date = df$Start_Date)
+
+#We drop the duplicates and NaN values
+df_Start_Date <- df_Start_Date %>%
+  distinct(Start_Date) %>%
+  filter(!is.na(Start_Date))
+
+df_End_Date <- data.frame(End_Date = df$End_Date) %>%
+  distinct(End_Date) %>%
+  filter(!is.na(End_Date))
+
+#Renaming the columns
+colnames(df_Start_Date) <- colnames(df_End_Date)
+
+#Combining df_Start_Date and df_End_Date
+df_appended <- rbind(df_Start_Date, df_End_Date)
+colnames(df_appended) <- "Covid_19_dates"
+df_appended$Covid_19_dates <- as.Date(df_appended$Covid_19_dates, format="%d %B %Y")
+#We arrange the dataframe from earliest date to latest
+df_appended <- df_appended[order(df_appended$Covid_19_dates, decreasing = FALSE), ]
+df_appended <- as.data.frame(df_appended)
+
+colnames(df_appended) <- "Covid_19_dates"
+#All these dates are not Kuala Lumpur and Selangor MCO dates. Hence we drop them
+dates_to_drop <- as.Date(c("2021-07-05", "2021-07-07", "2021-07-10", "2021-07-14", "2021-08-26", "2021-09-04", "2021-09-24", "2021-08-04", "2021-09-04", "2021-09-17", "2021-09-24", "2021-10-08", "	
+2021-06-15", "2021-08-26", "2021-09-24", "2021-10-08", "2021-10-25", "2021-11-08", "2022-01-03", "2021-06-28", "2021-12-31", "2021-06-15"))
+
+df_appended <- df_appended %>%
+  distinct(Covid_19_dates) %>%
+  filter(!Covid_19_dates %in% dates_to_drop)
+
+View(df_appended)
+write.csv(df_appended, "Covid-19_dates.csv", row.names = FALSE)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+
+```{r}
+
+#scaping 2021 holiday list
+library(rvest)
+library(dplyr)
+
+# URL_2021
+url_2021 <- "https://publicholidays.com.my/2021-dates/"
+
+webpage_2021 <- read_html(url_2021)
+
+#Selecting the relevant table from the website
+table_data_2021 <- webpage_2021 %>%
+  html_nodes("table.publicholidays") %>%
+  html_table(fill = TRUE)
+
+#Converting table to dataframe
+table_data_2021 <- as.data.frame(table_data_2021[[1]])
+
+#Extracting the holiday dates
+table_data_2021 <- table_data_2021 %>%
+  filter(grepl("^\\d+\\s\\w+$", Date))
+
+table_data_2021 <- table_data_2021 %>%
+  mutate(formatted_date = format(as.Date(Date, format = "%d %b"), "2021-%m-%d"))
+View(table_data_2021)
+
+holiday_2021 <- as.data.frame(table_data_2021$formatted_date)
+View(holiday_2021)
+colnames(holiday_2021) <- "holiday_2021_dates"
+write.csv(holiday_2021, "Public_Holiday_2021.csv", row.names = FALSE)
+
+```
+
+```{r}
+#scaping 2022 holiday
+library(rvest)
+library(dplyr)
+
+# URL_2022
+url_2022 <- "https://publicholidays.com.my/2022-dates/"
+
+webpage_2022 <- read_html(url_2022)
+
+table_data_2022 <- webpage_2022 %>%
+  html_nodes("table.publicholidays") %>%
+  html_table(fill = TRUE)
+
+table_data_2022 <- as.data.frame(table_data_2022[[1]])
+table_data_2022 <- table_data_2022 %>%
+  filter(grepl("^\\d+\\s\\w+$", Date))
+table_data_2022 <- table_data_2022 %>%
+  mutate(formatted_date = format(as.Date(Date, format = "%d %b"), "2022-%m-%d"))
+View(table_data_2022)
+
+holiday_2022 <- as.data.frame(table_data_2022$formatted_date)
+View(holiday_2022)
+colnames(holiday_2022) <- "holiday_2022_dates"
+write.csv(holiday_2022, "Public_Holiday_2022.csv", row.names = FALSE)
+```
+
+```{r}
+#scaping 2023 holiday
+library(rvest)
+library(dplyr)
+
+# URL_2023
+url_2023 <- "https://publicholidays.com.my/2023-dates/"
+
+webpage_2023 <- read_html(url_2023)
+
+table_data_2023 <- webpage_2023 %>%
+  html_nodes("table.publicholidays") %>%
+  html_table(fill = TRUE)
+
+table_data_2023 <- as.data.frame(table_data_2023[[1]])
+table_data_2023 <- table_data_2023 %>%
+  filter(grepl("^\\d+\\s\\w+$", Date))
+table_data_2023 <- table_data_2023 %>%
+  mutate(formatted_date = format(as.Date(Date, format = "%d %b"), "2023-%m-%d"))
+View(table_data_2023)
+
+holiday_2023 <- as.data.frame(table_data_2023$formatted_date)
+View(holiday_2023)
+colnames(holiday_2023) <- "holiday_2023_dates"
+write.csv(holiday_2023, "Public_Holiday_2023.csv", row.names = FALSE)
+```
+
+```{r}
+#scaping 2020 holiday
+library(rvest)
+library(dplyr)
+
+# URL_2020
+url_2020 <- "https://publicholidays.com.my/2020-dates/"
+
+webpage_2020 <- read_html(url_2020)
+
+table_data_2020 <- webpage_2020 %>%
+  html_nodes("table.publicholidays") %>%
+  html_table(fill = TRUE)
+
+table_data_2020 <- as.data.frame(table_data_2020[[1]])
+table_data_2020 <- table_data_2020 %>%
+  filter(grepl("^\\d+\\s\\w+$", Date))
+table_data_2020 <- table_data_2020 %>%
+  mutate(formatted_date = format(as.Date(Date, format = "%d %b"), "2020-%m-%d"))
+View(table_data_2020)
+
+holiday_2020 <- as.data.frame(table_data_2020$formatted_date)
+View(holiday_2020)
+colnames(holiday_2020) <- "holiday_2020_dates"
+write.csv(holiday_2020, "Public_Holiday_2020.csv", row.names = FALSE)
+```
+
+```{r}
+#scaping 2019 holiday
+library(rvest)
+library(dplyr)
+
+# URL_2019
+url_2019 <- "https://publicholidays.com.my/2019-dates/"
+
+webpage_2019 <- read_html(url_2019)
+
+table_data_2019 <- webpage_2019 %>%
+  html_nodes("table.publicholidays") %>%
+  html_table(fill = TRUE)
+
+table_data_2019 <- as.data.frame(table_data_2019[[1]])
+table_data_2019 <- table_data_2019 %>%
+  filter(grepl("^\\d+\\s\\w+$", Date))
+table_data_2019 <- table_data_2019 %>%
+  mutate(formatted_date = format(as.Date(Date, format = "%d %b"), "2019-%m-%d"))
+View(table_data_2019)
+
+holiday_2019 <- as.data.frame(table_data_2019$formatted_date)
+View(holiday_2019)
+colnames(holiday_2019) <- "holiday_2019_dates"
+write.csv(holiday_2019, "Public_Holiday_2019.csv", row.names = FALSE)
+```
+
+
+```{r}
+#Importing the csv
+library(tidyr)
+library(zoo)
+library(stringr)
+
+ridership <- read.csv('ridership_headline.csv')
+fuelprice <- read.csv('fuelprice.csv')
+
+#Select the series type = 'level' in fuel price
+fuelprice_filtered <- fuelprice[fuelprice$series_type == 'level', c("date","ron95", "ron97", "diesel")]
+weather <- read.csv('weather.csv')
+
+#Renaming the weather and holiday column to date
+names(weather)[names(weather) == 'datetime'] <- 'date'
+colnames(holiday_2019) <- 'date'
+colnames(holiday_2020) <- 'date'
+colnames(holiday_2021) <- 'date'
+colnames(holiday_2022) <- 'date'
+colnames(holiday_2023) <- 'date'
+colnames(df_appended) <- 'date'
+
+#Extracting relevant features for weather
+weather2 <- weather[, c('date', 'preciptype', 'temp', 'uvindex')]
+
+listofholiday <- list(
+  holiday_2019 = holiday_2019,
+  holiday_2020 = holiday_2020,
+  holiday_2021 = holiday_2021,
+  holiday_2022 = holiday_2022,
+  holiday_2023 = holiday_2023
+)
+
+#Combining all the list of holiday dataframe
+holiday_df <- do.call(bind_rows, listofholiday)
+
+#If holiday, create a column called holiday and encode 1 when it is holiday session
+holiday_df$holiday <- ifelse(!is.na(holiday_df$date), 1, 0)
+View(holiday_df)
+
+#If covid, create a column called covid and encode 1 when it is covid period
+df_appended$covid <- ifelse(!is.na(df_appended$date), 1, 0)
+df_appended <- df_appended[, c("date", "covid")]
+
+
+listofdf <- list(
+  ridership = ridership,
+  fuelprice = fuelprice_filtered,
+  weather = weather2,
+  holiday = holiday_df,
+  covid = df_appended
+)
+
+#Using Reduce function to merge the multiple dataframe
+result_df1 <- Reduce(function(x, y) merge(x, y, by = "date", all.x = TRUE), listofdf)
+
+
+result_df1$ron95 <- na.locf(result_df1$ron95)
+result_df1$ron97 <- na.locf(result_df1$ron97)
+result_df1$diesel <- na.locf(result_df1$diesel)
+
+first_filled_index <- which(result_df1$covid == 1)[1]
+last_non_missing_index <- tail(which(!is.na(result_df1$covid)), 1)
+
+result_df1$covid <- ifelse(seq_along(result_df1$covid) >= first_filled_index & seq_along(result_df1$covid) <= last_non_missing_index, 1, result_df1$covid)
+
+View(result_df1)
+
+write.csv(result_df1, "result_df.csv", row.names = FALSE)
+```
+
+## Data preprocessing
+```{r}
+library(dplyr)
+result_df1 <- read.csv("result_df.csv")
+#Selecting only Kuala Lumpur line
+result_df_1 <- result_df1 %>%
+  select(-c("bus_rkn", "bus_rpn", "rail_ets", "rail_intercity", "rail_komuter", "rail_tebrau"))
+
+
+write.csv(result_df_1, 'result_df_1.csv', row.names=FALSE)
+
+cname <- names(result_df_1)
+for (i in cname){
+  result_df_1[!is.na(result_df_1[i]) & result_df_1[i] == "", i] <- NA
+}
+
+result_df_1$covid <- ifelse(is.na(result_df_1$covid), 0, result_df_1$covid)
+result_df_1$holiday <- ifelse(is.na(result_df_1$holiday), 0, result_df_1$holiday)
+result_df_1$preciptype <- ifelse(result_df_1$preciptype == 'rain', 1, ifelse(is.na(result_df_1$preciptype), 0, result_df_1$preciptype))
+
+
+#Fill in missing values
+result_df_1$bus_rkl[is.na(result_df_1$bus_rkl)] <- mean(result_df_1$bus_rkl, na.rm = TRUE)
+result_df_1$rail_mrt_pjy[is.na(result_df_1$rail_mrt_pjy)] <- mean(result_df_1$rail_mrt_pjy, na.rm = TRUE)
+result_df_1$preciptype <- ifelse(is.na(result_df_1$preciptype), 0, result_df_1$preciptype)
+
+#Check for missing values
+cname <- names(result_df_1)
+for (i in cname){
+  print(paste(i, sum(result_df_1[i] == "")))
+  result_df_1[!is.na(result_df_1[i]) & result_df_1[i] == "", i] <- NA
+}
+
+#Check for dimension, structure and summary of the data
+str(result_df_1) #structure
+summary(result_df_1) #summary
+dim(result_df_1) #dimension
+
+View(result_df_1)
+write.csv(result_df_1, "df_cleaned.csv", row.names=FALSE)
+```
+
+## Exploratory Data Analysis
+```{r library, echo=TRUE, include=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(ragg)
+#library(palmerpenguins)
+library(Hmisc)
+library(corrplot)
+library(GGally)
+theme_update(plot.title = element_text(hjust = 0.5))
+
+data<-read.csv("df_cleaned.csv")
+str(data)
+
+```
+## 1. Reading data from file
+
+```{r}
+data<-read.csv("df_cleaned.csv")
+str(data)
+```
+
+## 2. Transform the data into appropriate type
+
+```{r}
+data$date <-as.Date(data$date) # from char to date
+data$bus_rkl<-as.integer(data$bus_rkl) # from num to int
+data$rail_mrt_pjy<-as.integer(data$rail_mrt_pjy) # from num to int
+str(data)
+```
+
+## 3. Takes public transports ridership columns and gathers them into key-value pairs, duplicating all other columns
+
+```{r gather}
+data1<-data %>%
+  select("date", "bus_rkl", "rail_lrt_ampang", "rail_mrt_kajang", "rail_lrt_kj", "rail_monorail", "rail_mrt_pjy") %>%
+  gather("transport", "passenger", 2:7)
+head(data1,10)
+```
+## 4. Plot individual scatterplot for public transports ridership
+
+```{r echo=TRUE, fig.height=12, fig.width=25}
+plotname<-c('bus_rkl'='Bus', 'rail_lrt_ampang'="LRT Ampang",    "rail_mrt_kajang"="MRT Kajang", "rail_lrt_kj"="LRT Kelana Jaya", 'rail_monorail'='Monorail', 'rail_mrt_pjy'="MRT Putrajaya")
+p1<- ggplot(data1, aes(x = date, y = (passenger/1000))) + 
+     geom_point(color = "steel blue", size=1.5) + 
+     facet_wrap(~transport, labeller = as_labeller(plotname)) +
+     ggtitle("Public Transport Services Ridership") + xlab("Date") +  ylab("Daily ridership ('000)")+
+     theme(axis.text=element_text(size=20), #change font size of axis text
+           axis.title=element_text(size=20), #change font size of axis titles
+           plot.title=element_text(size=30), #change font size of plot title
+           legend.text=element_text(size=20), #change font size of legend text
+           legend.title=element_text(size=20),
+           strip.text = element_text(size=20)) #change font size of legend title  
+plot(p1)
+```
+
+## 5. Plot multiple scatterplot for public transports ridership
+
+```{r echo=TRUE, fig.height=10, fig.width=25}
+p2<-ggplot(data1, aes(x = date, y = (passenger/1000), shape=transport, color=transport )) + 
+  geom_point() + 
+  ggtitle("Public Transport Services Ridership") + xlab("Date") + ylab("Daily ridership ('000)") +
+  scale_color_manual(name = "Public transport", 
+                     labels = c("Bus", "LRT Ampang","LRT Kelana Jaya", "Monorail","MRT Kajang","MRT Putrajaya"),
+                     values = c("darkred", "steelblue", "yellow", 'purple','black','green'))+
+  scale_shape_manual(values=c(15, 16, 17, 18, 4, 7),
+                     labels = c("Bus", "LRT Ampang","LRT Kelana Jaya", "Monorail","MRT Kajang","MRT Putrajaya"),
+                     name = "Public transport")+
+  theme(axis.text=element_text(size=20), #change font size of axis text
+        axis.title=element_text(size=20), #change font size of axis titles
+        plot.title=element_text(size=30), #change font size of plot title
+        legend.text=element_text(size=20), #change font size of legend text
+        legend.title=element_text(size=20))+
+        guides(color = guide_legend(override.aes = list(size = 5)))
+plot(p2)
+```
+
+## 6. Plot pie chart of Public transport services total ridership
+
+```{r echo=TRUE, fig.height=6, fig.width=6}
+data2<- data.frame("Transport" = c("Bus", "LRT Ampang", "MRT Kajang", "LRT Kelana Jaya", "Monorail", "MRT Putrajaya"),
+"Ridership" = c(sum(data$bus_rkl),sum(data$rail_lrt_ampang),sum(data$rail_mrt_kajang), sum(data$rail_lrt_kj), sum(data$rail_monorail),sum(data$rail_mrt_pjy)))
+
+p4<-ggplot(data2, aes(x = "", y = Ridership, fill = Transport)) +
+  geom_bar(width = 1, stat = "identity", color = "white") +
+  coord_polar("y", start = 0)+
+  geom_text(aes(label = Ridership), position = position_stack(vjust=0.5), color = "white")+
+  ggtitle("Public Transport Services Total Ridership")+
+  scale_fill_manual(values = c("darkred", "steelblue", "yellow", 'purple','black','green')) +
+  labs(x = NULL, y = NULL) +
+   theme_classic() +
+  theme(plot.title=element_text(size=15, hjust = 0.5), 
+        legend.text=element_text(size=8), 
+        legend.title=element_text(size=10),
+        axis.line = element_blank(),
+        axis.text = element_blank(),
+        axis.ticks = element_blank())
+plot(p4)
+```
+
+## 7.Plot individual scatterplot for public transports ridership during holiday and non holiday
+```{r echo=TRUE, fig.height=12, fig.width=30}
+data3<-data %>%
+  gather("transport", "passenger", 2:7)
+data3$holiday<-as.character(data3$holiday)
+
+p5<- ggplot(data3, aes(x=date, y = (passenger/1000), group=holiday)) + 
+  geom_point(aes(color=holiday), size=1) +
+  theme_gray(base_size = 10) +
+  facet_wrap(~transport, labeller = as_labeller(plotname), scales="free") +
+  ggtitle("Public Transport Services Ridership During Holiday and Non Holiday") + xlab("Date") + ylab("Daily ridership ('000)") +
+  scale_color_manual(values = c("blue", "orange"),
+                     name = "Holiday", 
+                     labels = c("Non holiday",'holiday'))+
+  theme(axis.text=element_text(size=20), #change font size of axis text
+        axis.title=element_text(size=20), #change font size of axis titles
+        plot.title=element_text(size=30, hjust = 0.5), #change font size of plot title
+        legend.text=element_text(size=20), #change font size of legend text
+        legend.title=element_text(size=20),
+        strip.text = element_text(size=20))+
+        guides(color = guide_legend(override.aes = list(size = 5)))
+plot(p5)  
+```
+
+## 8. Plot individual histogram to show the distribution of public transports  ridership during covid and no covid
+```{r echo=TRUE, fig.height=12, fig.width=30}
+data3$covid<-as.character(data3$covid)
+
+p6<- ggplot(data3, aes(x=(passenger/1000), fill=covid)) + 
+  geom_histogram(position="identity", alpha=0.5, color='black', binwidth=5) +
+  theme_gray(base_size = 10) +
+  facet_wrap(~transport, labeller = as_labeller(plotname), scales='free') +
+  ggtitle("Public Transport Services Ridership During Covid and Non Covid") + ylab("Count") + xlab("Daily ridership ('000)") +
+   scale_fill_manual(name = "Covid", labels = c("Non Covid",'Covid'), 
+                     values=c("deepskyblue1", "coral"))+
+   theme(axis.text=element_text(size=20), #change font size of axis text
+        axis.title=element_text(size=20), #change font size of axis titles
+        plot.title=element_text(size=30, hjust = 0.5), 
+        legend.text=element_text(size=20), #change font size of legend text
+        legend.title=element_text(size=20),
+        strip.text = element_text(size=20))
+plot(p6) 
+
+```
+
+## 9. Plot individual scatterplot for public transports ridership based on preciptype
+```{r echo=TRUE, fig.height=12, fig.width=30}
+data3$preciptype<-as.character(data3$preciptype)
+
+p7<- ggplot(data3, aes(x=date, y = (passenger/1000), group=preciptype)) + 
+  geom_point(aes(color=preciptype), size=1.5) +
+  theme_gray(base_size = 10) +
+  facet_wrap(~transport, labeller = as_labeller(plotname), scales="free") +
+  ggtitle("Public Transport Services Ridership") + xlab("Date") + ylab("Daily ridership ('000)") +
+  scale_color_manual(values = c("blue", "darksalmon"),
+                     name = "Precitype", 
+                     labels = c("No rain",'Rain'))+
+  theme(axis.text=element_text(size=20), #change font size of axis text
+        axis.title=element_text(size=20), #change font size of axis titles
+        plot.title=element_text(size=30, hjust = 0.5), #change font size of plot title
+        legend.text=element_text(size=20), #change font size of legend text
+        legend.title=element_text(size=20),
+        strip.text = element_text(size=20))+
+        guides(color = guide_legend(override.aes = list(size = 5)))
+plot(p7) 
+```
+## 10. Plot scatterplot for daily ridership and temperature
+```{r echo=TRUE, fig.height=12, fig.width=30}
+p8<- ggplot(data3, aes(x = temp, y = (passenger/1000))) + 
+     geom_point(color = "steel blue", size=1.5) + 
+     facet_wrap(~transport, labeller = as_labeller(plotname), scales='free') +
+     ggtitle("Public Transport Services Ridership and Temperature") + xlab("Temperature") +  ylab("Daily ridership ('000)")+
+     theme(axis.text=element_text(size=20), #change font size of axis text
+           axis.title=element_text(size=20), #change font size of axis titles
+           plot.title=element_text(size=30), #change font size of plot title
+           legend.text=element_text(size=20), #change font size of legend text
+           legend.title=element_text(size=20),
+           strip.text = element_text(size=20)) #change font size of legend title
+plot(p8)
+```
+
+## 11. Plot scatterplot for daily ridership and UV Index
+```{r echo=TRUE, fig.height=12, fig.width=30}
+p9<- ggplot(data3, aes(x = uvindex, y = (passenger/1000))) + 
+     geom_point(color = "steel blue", size=1.5) + 
+     facet_wrap(~transport, labeller = as_labeller(plotname), scales='free') +
+     ggtitle("Public Transport Services Ridership and Temperature") + xlab("UV index") +  ylab("Daily ridership ('000)")+
+     theme(axis.text=element_text(size=20), #change font size of axis text
+           axis.title=element_text(size=20), #change font size of axis titles
+           plot.title=element_text(size=30), #change font size of plot title
+           legend.text=element_text(size=20), #change font size of legend text
+           legend.title=element_text(size=20),
+           strip.text = element_text(size=20)) #change font size of legend title
+plot(p9)
+```
+
+## 13. Plot scatterplot for daily ridership and gas prices
+```{r echo=TRUE, fig.height=12, fig.width=30}
+data4<-data3 %>%
+  gather("Gas", "Prices", 2:4)
+
+p10<- ggplot(data4, aes(x=Prices, y = (passenger/1000), group=Gas)) + 
+  geom_point(aes(color=Gas), size=1.5) +
+  theme_gray(base_size = 10) +
+  facet_wrap(~transport, labeller = as_labeller(plotname), scales="free") +
+  ggtitle("Public Transport Services Ridership") + xlab("Gas") + ylab("Daily ridership ('000)") +
+  scale_color_manual(values = c("blue", "darksalmon", "yellow"),
+                     name = "Gas", labels = c("Diesel",'Ron 95','Ron 97'))+
+  theme(axis.text=element_text(size=20), #change font size of axis text
+        axis.title=element_text(size=20), #change font size of axis titles
+        plot.title=element_text(size=30, hjust = 0.5), #change font size of plot title
+        legend.text=element_text(size=20), #change font size of legend text
+        legend.title=element_text(size=20),
+        strip.text = element_text(size=20))+
+  guides(color = guide_legend(override.aes = list(size = 5)))
+plot(p10) 
+```
+
+## 14. Statistical summary of the data
+```{r echo=TRUE}
+summary(data)
+```
+
+## 15. Plot individual histogram and density for public transports ridership
+```{r echo=TRUE, fig.height=12, fig.width=30}
+p11<-data3 %>%
+  ggplot(aes(x=passenger/1000)) +
+  geom_histogram(aes(y=after_stat(density)),color="steel blue", fill="steel blue", alpha=0.6, position = 'identity') +
+  geom_density(color="dark red")+
+  facet_wrap(~transport, labeller = as_labeller(plotname), scales='free') +
+  ggtitle("Public Transport Services Ridership") + ylab('Density') + xlab("Ridership ('000)")+
+  theme(axis.text=element_text(size=20), #change font size of axis text
+        axis.title=element_text(size=20), #change font size of axis titles
+        plot.title=element_text(size=30),
+        strip.text = element_text(size=20)) #change font size of plot title
+plot(p11)
+
+```
+
+## 16. Correlation coefficient and p-value matrix
+
+```{r echo=TRUE}
+corr <- rcorr(as.matrix.data.frame(data[,2:15]))
+corr
+```
+
+## 17. Creates a correlogram to display the correlation matrix
+```{r echo=TRUE} 
+corrplot(corr$r, type = "upper", order = "hclust", 
+         tl.col = "black", tl.srt = 45)
+```
+## 18. What is the boxplot of the entire distribution?
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+df <- read.csv("df_cleaned.csv")
+df <- df %>%
+  select(-date)  # Remove the 'df,' prefix
+
+column_names <- colnames(df)
+df2 <- gather(df)
+ggplot(df2, aes(x = key, y = value)) +
+  geom_boxplot(fill = "#0c4c8a") +
+  theme_minimal() +
+  labs(x = "Column Name", y = "Value", title = "Boxplot for the Entire Data Frame") + theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+## 19. Univariate analysis of distribution of LRT users at Kelana Jaya line
+```{r}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+df <- read.csv("df_cleaned.csv")
+df <- df %>%
+  select(-date)
+column_names <- colnames(df)
+for (i in column_names){
+  histogram <- ggplot(data=df, aes(x = rail_lrt_kj)) + geom_histogram()
+  print(histogram)
+}
+
+```
+## 20. How is ridership distributed between different fuel types for rail_lrt_kj?
+```{r}
+df3 <- gather(df, key = "Fuel_Type", value = "Fuel_Price", ron95, ron97, diesel)
+
+ggplot(df3, aes(x = Fuel_Price, y = rail_lrt_kj, color = Fuel_Type)) +
+  geom_point() +
+  labs(x = "Fuel Price", y = "Rail LRT KJ Ridership", color = "Fuel Type") +
+  ggtitle("Scatter Plot of Rail LRT KJ Ridership vs. Fuel Price")
+
+```
+## 21. Is there an increase in ridership when it is raining?
+```{r}
+
+library(ggplot2)
+df4 <- df
+df4$preciptype <- ifelse(df4$preciptype == 1, "Rain", "No Rain")
+ggplot(df4, aes(x = preciptype, y = rail_lrt_kj)) +
+  geom_bar(stat="identity") +
+  labs(x = "Precipitation Type", y = "Ridership", title = "Ridership when it is raining") +
+  theme_minimal()
+```
+## 22. What is the correlation between the variables for machine learning model?
+```{r}
+
+library(e1071)
+library(corrplot)
+library(xgboost)
+library(cowplot)
+
+corr <- cor(df)
+corrplot(corr, method='number', type="upper", order="hclust", addCoef.col =  "black")
+```
+
+## 23. How is the ridership of LRT Kelana Jaya over time?
+```{r}
+
+library(ggplot2)
+library(dplyr)
+df <- read.csv("df_cleaned.csv")
+cutoff_date_start <- as.Date("2020-03-01")
+cutoff_date_end <- as.Date("2020-12-31")
+df %>%
+  select(date, rail_lrt_kj, rail_mrt_kajang, rail_lrt_ampang, rail_monorail, rail_mrt_pjy) %>%
+  gather(key = "rail_type", value = "ridership", -date) %>%
+  mutate(date = as.Date(date)) %>%
+  ggplot(aes(x = date, y = ridership, color = rail_type)) +
+  geom_line() +
+  geom_vline(xintercept = as.numeric(cutoff_date_start), linetype = "dashed", color = "red") +
+  geom_vline(xintercept = as.numeric(cutoff_date_end), linetype = "dashed", color = "red") +
+  labs(x = "Date", y = "Ridership", color = "Rail Type") +
+  ggtitle("Line Graph of Rail LRT/Monorail/MRT Over Time")
+```
+## 24.What is the ridership comparison between holiday and non-holiday?
+```{r}
+
+df <- read.csv("df_cleaned.csv")
+df4 <- df %>%
+  mutate(date = as.Date(date)) %>%
+  filter(covid == 1)
+df4 <- df %>%
+  mutate(holiday = ifelse(holiday == 1, "Holiday", "Non-Holiday"))
+
+ridership_summary <- df %>%
+  group_by(holiday) %>%
+  summarise(Average_Ridership = mean(rail_lrt_kj, na.rm = TRUE))
+
+ggplot(ridership_summary, aes(x = holiday, y = Average_Ridership)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  labs(title = "Ridership Comparison between Holidays and Non-Holidays",
+       x = "Day Type", y = "Average Ridership") +
+  theme_minimal()
+
+```
+
+## 25.Rail Monorail Passengers Over Time
+
+```{r}
+df <- read_csv('df_cleaned.csv')
+df$date <- as.Date(df$date)
+library(ggplot2)
+ggplot(df, aes(x = date, y = rail_monorail)) +
+  geom_line() +
+  labs(title = "Rail Monorail Passengers Over Time", x = "Date", y = "Passengers")
+```
+
+##  26. Average UV Index by Holiday
+
+```{r uv-index-holiday-bar}
+ggplot(df, aes(x = factor(holiday), y = uvindex)) +
+  geom_bar(stat = "summary", fun = "mean") +
+  labs(title = "Average UV Index by Holiday", x = "Holiday", y = "Average UV Index")
+```
+## 27. Boxplot of Temperatures
+```{r temperature-boxplot}
+ggplot(df, aes(y = temp)) +
+  geom_boxplot() +
+  labs(title = "Boxplot of Temperatures", y = "Temperature")
+```
+
+## 28. Diesel Prices vs. Bus Ridership
+
+```{r diesel-bus-scatter}
+ggplot(df, aes(x = diesel, y = bus_rkl)) +
+  geom_point() +
+  labs(title = "Diesel Prices vs. Bus Ridership", x = "Diesel Price", y = "Bus Ridership")
+```
+
+##  29. Histogram of Rail MRT Kajang Passengers
+```{r}
+ggplot(df, aes(x = rail_mrt_kajang)) +
+  geom_histogram(bins = 30, fill = "blue", color = "white") +
+  labs(title = "Histogram of Rail MRT Kajang Passengers", x = "Passengers")
+```
+
+## Data Preprocessing for SARIMA
+```{r}
+df_keras <- read.csv("df_cleaned.csv")
+df_keras_preprocessing <- data.matrix(df_keras)
+mean <- apply(df_keras_preprocessing, 2, mean)
+std <- apply(df_keras_preprocessing, 2, sd)
+df_keras_preprocessing <- scale(df_keras_preprocessing, center=mean, scale=std)
+
+#Normalize function
+normalize <- function(x){
+  return ((x - min(x) / max(x) - min(x)))
+}
+max <- apply(df_keras_preprocessing, 2, max)
+min <- apply(df_keras_preprocessing, 2, min)
+
+#Visualize the normalize data
+df_keras_preprocessing <- apply(df_keras_preprocessing, 2, normalize)
+plot(df_keras_preprocessing[1: 1000, 4])
+```
+
+
+## SARIMA forecast with categorising predictions into low, medium and high ridership
+```{r}
+library(forecast)
+library(dplyr)
+df_sarima <- read.csv("df_cleaned.csv")
+df_sarima %>%
+  select(date, rail_lrt_kj)
+
+set.seed(123)
+
+
+#Defining a time series object
+daily_data <- ts(df_sarima$rail_lrt_kj, frequency = 365)  
+
+sarima_model <- auto.arima(daily_data, seasonal = (period=365)) #select the best p,d, q values with lowest AIC
+
+summary(sarima_model)
+
+#Forecast for the next 30 days
+forecast_values <- forecast(sarima_model, h = 30)  
+
+#Categorise the predictions into low, medium, high
+categories <- ifelse(forecast_values$mean < 100000, 'Low ridership',
+                     ifelse(forecast_values$mean >= 100000 & forecast_values$mean < 300000, 'Medium ridership',
+                            ifelse(forecast_values$mean >= 300000, 'High ridership', NA)))
+
+#Display forecasted results in a dataframe
+forecast_data <- data.frame(Date = seq(as.Date(Sys.Date()) + 1, by = "days", length.out = length(forecast_values$mean)),
+                            Forecast = forecast_values$mean,
+                            Category = categories)
+View(forecast_data)
+
+#Plot the forecast values
+
+plot(forecast_values, main = "SARIMA Forecast")
+lines(daily_data, col = "black", lty = 1)
+```
+
+## Multiple Linear Regression Preprocessing
+```{r}
+library(caret)
+library(ggplot2)
+# Import dataset
+data <- read.csv("df_cleaned.csv")
+
+# Drop the 'date' column
+data <- data[, -1]
+
+# Convert 'preciptype', 'holiday', and 'covid' to factors
+data$preciptype <- as.factor(data$preciptype)
+data$holiday <- as.factor(data$holiday)
+data$covid <- as.factor(data$covid)
+
+# Normalize the predictors
+data_normalized <- data
+
+# Exclude non-numeric columns from normalization
+numeric_cols <- sapply(data_normalized, is.numeric)
+data_normalized[, numeric_cols] <- scale(data_normalized[, numeric_cols])
+
+set.seed(123)  # For reproducibility
+train_index <- createDataPartition(data_normalized$bus_rkl, p = 0.9, list = FALSE)
+train_data <- data_normalized[train_index, ]
+test_data <- data_normalized[-train_index, ]
+```
+
+## Multiple Linear Regression on Bus RKL
+```{r}
+# Linear regression model training
+model_bus_rkl <- lm(bus_rkl ~ ., data = train_data)
+
+# Make predictions
+predictions_bus_rkl <- predict(model_bus_rkl, newdata = test_data)
+
+# Model evaluation
+bus_rkl_metrics <- caret::defaultSummary(data.frame(obs = test_data$bus_rkl, pred = predictions_bus_rkl))
+print("Normalized Data Metrics (Bus RKL):")
+print(bus_rkl_metrics)
+```
+
+## Multiple Linear Regression on LRT Ampang
+```{r}
+# Linear regression model training
+model_rail_lrt_ampang <- lm(rail_lrt_ampang ~ ., data = train_data)
+
+# Make predictions
+predictions_rail_lrt_ampang <- predict(model_rail_lrt_ampang, newdata = test_data)
+
+# Model evaluation
+rail_lrt_ampang_metrics <- caret::defaultSummary(data.frame(obs = test_data$rail_lrt_ampang, pred = predictions_rail_lrt_ampang))
+print("Normalized Data Metrics (LRT Ampang):")
+print(rail_lrt_ampang_metrics)
+```
+
+## Multiple Linear Regression on MRT Kajang
+```{r}
+# Linear regression model training
+model_rail_mrt_kajang <- lm(rail_mrt_kajang ~ ., data = train_data)
+
+# Make predictions
+predictions_rail_mrt_kajang <- predict(model_rail_mrt_kajang, newdata = test_data)
+
+# Model evaluation
+rail_mrt_kajang_metrics <- caret::defaultSummary(data.frame(obs = test_data$rail_mrt_kajang, pred = predictions_rail_mrt_kajang))
+print("Normalized Data Metrics (MRT Kajang):")
+print(rail_mrt_kajang_metrics)
+```
+
+## Multiple Linear Regression on LRT Kelana Jaya
+```{r}
+# Linear regression model training
+model_rail_lrt_kj <- lm(rail_lrt_kj ~ ., data = train_data)
+
+# Make predictions
+predictions_rail_lrt_kj <- predict(model_rail_lrt_kj, newdata = test_data)
+
+# Model evaluation
+rail_lrt_kj_metrics <- caret::defaultSummary(data.frame(obs = test_data$rail_lrt_kj, pred = predictions_rail_lrt_kj))
+print("Normalized Data Metrics (LRT Kelana Jaya):")
+print(rail_lrt_kj_metrics)
+```
+
+## Multiple Linear Regression on Monorail
+```{r}
+# Linear regression model training
+model_rail_monorail <- lm(rail_monorail ~ ., data = train_data)
+
+# Make predictions
+predictions_rail_monorail <- predict(model_rail_monorail, newdata = test_data)
+
+# Model evaluation
+rail_monorail_metrics <- caret::defaultSummary(data.frame(obs = test_data$rail_monorail, pred = predictions_rail_monorail))
+print("Normalized Data Metrics (Monorail):")
+print(rail_monorail_metrics)
+```
+
+## Multiple Linear Regression on MRT Putrajaya
+```{r}
+# Linear regression model training
+model_rail_mrt_pjy <- lm(rail_mrt_pjy ~ ., data = train_data)
+
+# Make predictions
+predictions_rail_mrt_pjy <- predict(model_rail_mrt_pjy, newdata = test_data)
+
+# Model evaluation
+rail_mrt_pjy_metrics <- caret::defaultSummary(data.frame(obs = test_data$rail_mrt_pjy, pred = predictions_rail_mrt_pjy))
+print("Normalized Data Metrics (MRT Putrajaya):")
+print(rail_mrt_pjy_metrics)
+```
+
+## Code below is the ARIMA modeling for the dataset
+```{r}
+# Load libraries
+library(tidyverse)
+library(forecast)
+```
+
+## Load & Explore Data
+```{r}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(forecast)
+```
+
+## Load & Explore Data for ARIMA
+```{r}
+data <- read.csv("df_cleaned.csv")
+str(data)
+```
+
+## Data preprocessing for ARIMA
+```{r}
+library(dplyr)
+# Convert 'date' column to a Date object
+data$date <- as.Date(data$date)
+
+# Convert 'preciptype', 'holiday', and 'covid' to factors
+data$preciptype <- as.factor(data$preciptype)
+data$holiday <- as.factor(data$holiday)
+data$covid <- as.factor(data$covid)
+
+# Normalization function
+normalize_series <- function(series) {
+  scale(series)
+}
+
+# Normalize the entire dataset
+normalized_data <- data %>%
+  mutate(across(where(is.numeric), normalize_series))
+```
+
+## Data Splitting for ARIMA
+```{r}
+# Split the data into training and testing sets
+train_ratio <- 0.8  # 80% for training, 20% for testing
+train_size <- floor(train_ratio * nrow(normalized_data))
+train_data <- normalized_data[1:train_size, ]
+test_data <- normalized_data[(train_size + 1):nrow(normalized_data), ]
+```
+
+## ARIMA Model Training and Evaluation for ARIMA
+```{r}
+library(forecast)
+arima_model <- function(train, test, target_variable) {
+  cat("Training ARIMA model for", target_variable, "\n")
+  
+  # Extract the target variable
+  y_train <- train[[target_variable]]
+  y_test <- test[[target_variable]]
+  
+  # Fit ARIMA model
+  arima_fit <- auto.arima(y_train)
+  
+  # Forecast
+  forecast_values <- forecast(arima_fit, h = length(y_test))
+  
+  # Model Evaluation
+  accuracy_metrics <- accuracy(forecast_values, y_test)
+  
+  # Print evaluation metrics
+  print(accuracy_metrics)
+  
+  # Plot actual vs. predicted
+  plot(forecast_values, main = paste("ARIMA Forecast for", target_variable))
+  lines(y_test, col = "red")
+  
+  # Save the model
+  save(arima_fit, file = paste("arima_model_", target_variable, ".RData", sep = ""))
+}
+
+# Apply the function for each target variable
+target_variables <- c("bus_rkl", "rail_lrt_ampang", "rail_mrt_kajang", "rail_lrt_kj", "rail_monorail", "rail_mrt_pjy")
+
+for (target_var in target_variables) {
+  arima_model(train_data, test_data, target_var)
+}
+```
+
+## XgBoost on RapidKL Kelana Jaya line with caret package
+```{r}
+#loading libraries
+library(xgboost)
+library(Metrics)
+library(caret)
+library(dplyr)
+
+
+
+#Removing data column
+df <- read.csv("df_cleaned.csv")
+df <- df %>%
+  select(-date)
+
+
+#Train-test-split the data based on 70% and 30%
+?createDataPartition
+set.seed(123)
+trainIndex <- createDataPartition(df$rail_lrt_kj, p = 0.7, list=FALSE)
+X <- df
+y <- df %>%
+  select(rail_lrt_kj)
+
+X_train <- X[trainIndex, ]
+X_test <- X[-trainIndex, ]
+y_train <- y[trainIndex, ]
+y_test <- y[-trainIndex, ]
+
+
+#Step 1: Training Search Grid
+grid_xg <- expand.grid(
+  nrounds=100,
+  max_depth=3,
+  eta = 0.3,
+  gamma=0,
+  colsample_bytree=1,
+  min_child_weight=1,
+  subsample=1
+)
+
+#Step 2: Train Control
+
+train_control <- caret::trainControl(
+  method="none",
+  verboseIter = FALSE,
+  allowParallel = TRUE
+)
+
+#Step 3: Training
+
+xgb <- caret::train(x = X_train, y = y_train, trControl = train_control, method = "xgbTree", tuneGrid=grid_xg)
+
+#Step 4: Prediction
+
+pred <- predict(xgb, X_test)
+best_params <- xgb$bestTune
+
+
+#Step 7: Evaluation of model
+
+rsquared_xgboost <- cor(pred, y_test)^2
+print(rsquared_xgboost)
+xgboost_mae <- mae(pred, y_test)
+xgboost_rmse <- rmse(pred, y_test)
+cat("MAE of Xgboost is : ", xgboost_mae, "\n")
+cat("RMSE of Xgboost is: ", xgboost_rmse, "\n")
+
+```
+
+## XgBoost on RapidKL Kelana Jaya line with mlr package
+```{r}
+#loading libraries
+library(xgboost)
+library(Metrics)
+library(caret)
+library(dplyr)
+library(mlr)
+
+#Removing data column
+df <- read.csv("df_cleaned.csv")
+df <- df %>%
+  select(-date)
+
+#Train-test-split the data based on 70% and 30%
+?createDataPartition
+set.seed(123)
+trainIndex <- createDataPartition(df$rail_lrt_kj, p = 0.7, list=FALSE)
+X <- df
+y <- df %>%
+  select(rail_lrt_kj)
+
+X_train <- X[trainIndex, ]
+X_test <- X[-trainIndex, ]
+y_train <- y[trainIndex, ]
+y_test <- y[-trainIndex, ]
+
+?preProcess
+
+#Step 1: Preprocessing and normalization
+preprocess_params_xg <- preProcess(X_train, method = c("center", "scale"))
+X_train_preprocessed <- predict(preprocess_params_xg, X_train)
+X_test_preprocessed <- predict(preprocess_params_xg, X_test)
+
+#Step 2: Specifying the parameters (Refer to documentation ?xgboost) - similar concept to param_grid for Python
+param_set_xgboost <- makeParamSet(
+  makeNumericParam("eta", lower = 0.01, upper = 0.3),
+  makeIntegerParam("nrounds", lower = 50, upper = 120),
+  makeIntegerParam("max_depth", lower = 3, upper = 9),
+  makeIntegerParam("min_child_weight", lower = 1, upper = 5),
+  makeNumericParam("subsample", lower = 0.8, upper = 1),
+  makeNumericParam("colsample_bytree", lower = 0.8, upper = 1),
+  makeNumericParam("lambda", lower = 0, upper = 5),
+  makeNumericParam("alpha", lower = 0, upper = 1)
+)
+
+
+#Step 3: Creating the model
+xgb <- makeLearner("regr.xgboost", predict.type="response")
+
+#Step 4: Create a regression task
+task <- makeRegrTask(data = X_train_preprocessed, target = "rail_lrt_kj")
+
+#Step 5: Perform hyperparameter tuning, performing RandomisedSearch
+res_xg <- tuneParams(
+  xgb, #model 
+  task = task, #regression task
+  resampling = makeResampleDesc("CV", iters=3), #cross-validation = 3
+  par.set = param_set_xgboost, #parameters defined as above
+  control = makeTuneControlRandom(maxit=50) #randomly sample combinations of parameter and evaluate their performance for up to 50 iterations
+)
+
+#Step 6: Finding the best model
+best_model_xg <- res_xg$learner 
+final_model_xg <- train(best_model_xg, task)
+y_pred_xg <- predict(final_model_xg, newdata = X_test_preprocessed)
+inverse_transformed_predictions <- exp(y_pred_xg$data$truth) #because the data is normalized hence we need to inverse transform the prediction
+
+#Step 7: Evaluation of model
+rsquared_xgboost <- cor(inverse_transformed_predictions, y_test)^2
+print(rsquared_xgboost)
+plot(inverse_transformed_predictions, y_pred_xg$data$truth)
+xgboost_mae <- mae(inverse_transformed_predictions, y_pred_xg$data$truth)
+xgboost_rmse <- rmse(inverse_transformed_predictions, y_pred_xg$data$truth)
+cat("MAE of Xgboost is : ", xgboost_mae, "\n")
+cat("RMSE of Xgboost is: ", xgboost_rmse, "\n")
+```
+
+## K-means clustering on Rapid KL LRT Kelana Jaya Line
+```{r}
+library(dplyr)
+library(caret)
+library(mlr)
+library(fpc)
+
+#Defining X and y
+set.seed(43)
+X <- df %>%
+  select(-rail_lrt_kj)
+y <- df %>%
+  select(rail_lrt_kj)
+
+#Step 1: preprocessing
+preprocess_params_k_cluster <- preProcess(X, method = c("center", "scale"))
+X_preprocessed <- predict(preprocess_params_k_cluster, X)
+
+#Step 2: Doing WSS score
+wss <- NULL
+for (i in 1:10){
+  kmeans_model = kmeans(X_preprocessed, centers=i)
+  wss[i] <- sum(kmeans_model$withinss)
+}
+
+plot(1:10, wss, type='o', xlab = "Number of clusters (k)", ylab = "Within the sum of Squares WSS", main = "Elbow Method to Determine Optimal k" )
+
+k = 5 #defining the K
+
+#Step 3: Plotting the k_means cluster
+kmeans_model <- kmeans(X_preprocessed, centers=k)
+plotcluster(X_preprocessed, kmeans_model$cluster, pointsbyclvecd = FALSE)
+
+```
+
+## Below code is for random forest using caret
+
+```{r}
+library(caret)
+library(randomForest)
+library(ggplot2)
+library(readr)
+library(dplyr)
+
+data <- read.csv("df_cleaned.csv")
+
+# Drop the 'date' column
+data <- data[, -1]
+
+# Convert 'preciptype', 'holiday', and 'covid' to factors
+data$preciptype <- as.factor(data$preciptype)
+data$holiday <- as.factor(data$holiday)
+data$covid <- as.factor(data$covid)
+
+# Normalize the predictors
+data_normalized <- data
+
+# Exclude non-numeric columns from normalization
+numeric_cols <- sapply(data_normalized, is.numeric)
+data_normalized[, numeric_cols] <- scale(data_normalized[, numeric_cols])
+
+set.seed(123)  # For reproducibility
+train_index <- createDataPartition(data_normalized$rail_lrt_kj, p = 0.9, list = FALSE)
+train_data <- data_normalized[train_index, ]
+test_data <- data_normalized[-train_index, ]
+head(train_data)
+
+rf <- randomForest(rail_lrt_kj ~ .,  # Formula specifying predictors
+                   data = train_data,
+                   ntree = 500,  # Number of trees (adjust as needed)
+                   )
+
+# Predictions
+predictions <- predict(rf, test_data)
+
+# Model Performance
+lrt_kj_metrics <- caret::defaultSummary(data.frame(obs = test_data$rail_lrt_kj, pred = predictions))
+print("Normalized Data Metrics (LRT Kelana Jaya Line):")
+print(lrt_kj_metrics)
+
+
+# Compare predictions and actual values
+comparison <- data.frame(Actual = test_data$rail_lrt_kj, Predicted = predictions)
+
+# Display the comparison
+print("Comparison of Actual vs Predicted Values:")
+print(comparison)
+```
+
+## Conclusion
+Multiple Linear Regression (0.99) was able to demonstrate a high level of accuracy with low MAE and RMSE compared to Random Forest (0.98) and XgBoost (0.85).
